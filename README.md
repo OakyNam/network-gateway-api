@@ -11,9 +11,11 @@ profiles, bastions and reusable network role accounts are supporting
 infrastructure: engineers use the application rather than maintaining direct
 device credentials and vendor-specific tribal knowledge.
 
-The repository directory and Git remote retain the historical `netconf-gateway`
-name. This is a **local administrator demo and development prototype**, not an
-authenticated production control plane.
+The repository is published as
+[`network-gateway-api`](https://github.com/OakyNam/network-gateway-api).
+This is a **local administrator demo and development prototype**, not a
+production deployment or a claim of verified compatibility with live vendor
+equipment.
 
 ## What it demonstrates
 
@@ -38,6 +40,20 @@ authenticated production control plane.
 
 Only local emulator compatibility is demonstrated. No real vendor equipment,
 external PostgreSQL server, hosted CI run or production deployment is implied.
+
+## Demo screenshots
+
+### Multi-transport connectivity
+
+![Eight-device connection test with SSH, NETCONF, Telnet and proxy paths](docs/linkedin/01-device-connectivity.png)
+
+### Normalized device and access-path view
+
+![Normalized simulated device overview and stored access path](docs/linkedin/02-normalized-device-overview.png)
+
+### Immutable configuration transactions
+
+![User-attributed static-route transaction history](docs/linkedin/03-immutable-transactions.png)
 
 ## Product model
 
