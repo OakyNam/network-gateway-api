@@ -6,4 +6,6 @@ python-decouple
 ncclient
 requests
 loguru
-paramiko
+paramiko>=3.2
+cryptography
+pydantic>=2.9

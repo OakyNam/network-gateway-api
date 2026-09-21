@@ -1,0 +1,6 @@
+{
+  "key_columns": ["vendor", "software"],
+  "map": {
+    "test-vendor:*": "test.fixtures.fake_client.FakeDeviceClient"
+  }
+}

@@ -4,6 +4,18 @@ config/logging_config.json
 config/proxy_config.json
 config/client_config.json
 config/db_client_config.json
+
+# Demo loopback profile: generated at runtime (SQLite DB, demo host key,
+# known_hosts, ssh_config). Fake credentials only; still not checked in
+# because it's a runtime artifact, not source.
+demo/data/*
+!demo/data/.gitkeep
+.local-data/
+gateway.key
+gateway.sqlite3
+demo_devices.sqlite3
+demo_host_key
+demo_bastion_key
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

@@ -1,0 +1,4 @@
+{
+  "table": "inventory",
+  "search_column": "device_name"
+}

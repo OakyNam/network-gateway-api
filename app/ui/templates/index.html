@@ -1,0 +1,388 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Network Gateway API | Connections</title>
+  <link rel="stylesheet" href="/ui/static/styles.css">
+  <script type="module" src="/ui/static/connections.mjs"></script>
+</head>
+<body>
+  <header>
+    <div><p class="eyebrow">NETWORK AUTOMATION / LOCAL CONTROL PANEL</p>
+      <h1>Network Gateway API</h1>
+      <p>Navigate devices through one normalized API, independent of vendor syntax and access path.</p>
+    </div>
+    <div class="identity-panel">
+      <div id="identity-summary" hidden>
+        <strong id="identity-name"></strong>
+        <span id="identity-email" class="hint"></span>
+        <span id="identity-roles" class="role-badges"></span>
+        <span id="identity-mode" class="hint"></span>
+        <a id="logout-link" href="/api/v1/logout">Sign out</a>
+      </div>
+      <a id="login-link" href="/api/v1/login" hidden>Sign in with Microsoft Entra ID</a>
+      <a id="api-docs-link" class="api-link" hidden>Open API documentation</a>
+      <span id="api-docs-status" class="hint" role="status">Checking API documentation availability...</span>
+    </div>
+  </header>
+  <nav aria-label="Configuration">
+    <a href="#devices" data-view="devices" aria-current="page">Devices</a>
+    <a href="#proxies" data-view="proxies">Proxies</a>
+    <a href="#role-accounts" data-view="role-accounts">Role accounts</a>
+    <a href="#transactions" data-view="transactions">Transactions</a>
+  </nav>
+  <main>
+    <aside class="notice">
+      <strong id="environment-label">Network administration boundary.</strong>
+      Engineers use Entra application roles; reusable network role accounts
+      provide device access without exposing device credentials to individual
+      users. Configuration changes are attributed to the signed-in engineer.
+      The offline demo uses a prominently labeled fake identity and fake device.
+    </aside>
+    <p id="status" role="status" aria-live="polite">Loading connection capabilities...</p>
+    <p id="error" role="alert" hidden></p>
+    <div class="device-layout" id="view-devices" data-page="devices">
+      <section class="panel inventory" aria-labelledby="inventory-heading">
+        <div class="section-heading">
+          <h2 id="inventory-heading">Devices</h2>
+          <button id="refresh" type="button">Refresh list</button>
+        </div>
+        <p class="hint">Profiles are saved through the API. Selecting a profile does not connect.
+          Device information views are currently available for explicitly configured Fake clients only.</p>
+        <div class="actions">
+          <button id="test-all" type="button" class="primary" disabled>Test all devices</button>
+          <button id="new" type="button">New device</button>
+        </div>
+        <p id="batch-progress" role="status" aria-live="polite">No bulk test run started.</p>
+        <progress id="batch-meter" value="0" max="1" aria-label="Bulk connection test progress" hidden></progress>
+        <div id="batch-exports" class="actions" hidden>
+          <a id="export-csv" download>Export CSV results</a>
+          <a id="export-json" download>Export JSON results</a>
+        </div>
+        <div class="table-scroll">
+          <table aria-label="Configured devices">
+            <thead><tr>
+              <th scope="col">Device</th><th scope="col">Protocol / address</th>
+              <th scope="col">Proxy</th><th scope="col">Role account</th>
+              <th scope="col">Last test</th><th scope="col">Details</th>
+              <th scope="col">Duration</th><th scope="col">Actions</th>
+            </tr></thead>
+            <tbody id="connections"></tbody>
+          </table>
+        </div>
+        <p class="hint">Test results describe a saved configuration at the time of
+          that run, not continuous monitoring. Run tests again after configuration
+          or network changes. Exports preserve the original run snapshot.</p>
+        <p id="empty" hidden>No profiles yet. Select New device to create one.</p>
+      </section>
+    </div>
+      <section class="panel editor device-page" id="device-editor" data-page="device-editor" aria-labelledby="editor-heading" hidden>
+        <p><a href="#devices">Back to devices</a></p>
+        <h2 id="editor-heading">New device</h2>
+        <form id="connection-form">
+          <fieldset id="device-fields">
+            <legend>Device connection</legend>
+            <div class="fields">
+              <label>Profile name
+                <input name="name" required maxlength="100" autocomplete="off">
+              </label>
+              <label>Device protocol
+                <select name="protocol" required></select>
+              </label>
+              <label>Device client
+                <select name="client_type" required>
+                  <option value="network">Network transport (real connection test)</option>
+                  <option value="fake">Fake device (simulated data and operations)</option>
+                </select>
+              </label>
+              <label>Device host
+                <input name="host" required placeholder="127.0.0.1" autocomplete="off">
+              </label>
+              <label>Device port
+                <input name="port" type="number" min="1" max="65535" required>
+              </label>
+              <label>Device role account
+                <select name="role_account_id"><option value="">Per-device credentials</option></select>
+              </label>
+              <label data-inline-device>Device username
+                <input name="username" autocomplete="off">
+              </label>
+              <label data-inline-device>Device password
+                <input name="password" type="password" autocomplete="new-password">
+                <span id="device-secret-state" class="hint">Not stored.</span>
+              </label>
+              <label class="check" data-inline-device><input name="clear_password" type="checkbox"> Clear stored device password</label>
+              <label data-inline-device>Device private-key file (optional)
+                <input name="private_key_path" autocomplete="off" placeholder="Server-local path">
+              </label>
+              <label>Device known-hosts file (optional)
+                <input name="known_hosts_path" autocomplete="off" placeholder="Server-local path">
+              </label>
+              <label>Timeout in seconds
+                <input name="timeout_seconds" type="number" min="1" max="30" value="5" required>
+              </label>
+            </div>
+          </fieldset>
+          <p class="hint">The fake client still resolves the saved device, role accounts
+            and proxy from storage and validates its fictional credentials. It never
+            opens a network connection. Use the seeded Fake device login and Fake
+            bastion profiles with <code>fake-device.invalid:22</code>.</p>
+          <fieldset>
+            <legend>Connection path</legend>
+            <label>Saved proxy
+              <select name="proxy_id"><option value="">Direct connection (no proxy)</option></select>
+            </label>
+            <p id="connector-description" class="hint"></p>
+            <p class="hint">Manage bastions and proxy credentials in <a href="#proxies">Proxies</a>.
+              This device uses the current saved proxy configuration at test time.</p>
+          </fieldset>
+          <p class="hint">Blank password fields preserve stored passwords when editing.
+            To remove one, use its clear checkbox. Key and trust paths refer to files
+            on the API server, not files in your browser. Passwords and private-key
+            contents are never requested back from the API.</p>
+          <div class="actions">
+            <button id="save" type="submit" class="primary" disabled>Save device</button>
+            <button id="test" type="button" disabled>Test saved connection</button>
+            <button id="delete" type="button" class="danger" disabled>Delete device</button>
+            <button id="close-editor" type="button">Cancel / back to devices</button>
+          </div>
+          <p id="unsaved" class="hint" hidden>Unsaved changes. Save before testing this configuration.</p>
+        </form>
+        <section id="test-result" aria-labelledby="test-heading" hidden>
+          <h3 id="test-heading">Connection test</h3>
+          <p id="test-summary" role="status" aria-live="polite"></p>
+          <dl id="test-details"></dl>
+          <p class="hint">A successful connection test is not proof that every
+            device operation or vendor command is supported. No configuration
+            changes are made by this test.</p>
+        </section>
+      </section>
+    <section id="device-details" class="panel details-page" data-page="device-details" aria-labelledby="device-details-heading" hidden>
+      <p><a href="#devices">Back to devices</a></p>
+      <div class="section-heading">
+        <h2 id="device-details-heading">Device information</h2>
+        <div class="actions">
+          <a id="details-edit-device">Edit connection</a>
+          <button id="details-refresh" type="button">Refresh device data</button>
+        </div>
+      </div>
+      <p class="notice"><strong>Simulated device data.</strong> This scaffold uses a
+        fake device client after resolving the saved connection, device role, proxy
+        and proxy role from the database. Static route changes are simulated and
+        persisted locally; no network equipment is changed. Connection tests for
+        profiles using the network client remain separate, real transport tests.</p>
+      <p id="device-data-status" role="status" aria-live="polite">Select a saved fake device to load its data.</p>
+      <nav class="detail-navigation" aria-label="Device information">
+        <a data-detail-tab="overview">Overview</a>
+        <a data-detail-tab="interfaces">Interfaces</a>
+        <a data-detail-tab="routing">Routing</a>
+        <a data-detail-tab="mpls">MPLS</a>
+      </nav>
+      <div id="device-data-content" hidden>
+        <section data-detail-panel="overview" aria-labelledby="detail-system-heading">
+          <h3 id="detail-system-heading">System and stored access path</h3>
+          <dl id="detail-system"></dl>
+        </section>
+        <section data-detail-panel="interfaces" aria-labelledby="detail-interfaces-heading" hidden>
+          <h3 id="detail-interfaces-heading">Interfaces</h3>
+          <div class="table-scroll"><table aria-label="Simulated device interfaces">
+            <thead><tr><th>Name</th><th>Description</th><th>Admin</th><th>Operational</th><th>MTU</th><th>MAC</th><th>Addresses</th><th>RX bytes</th><th>TX bytes</th></tr></thead>
+            <tbody id="detail-interface-rows"></tbody>
+          </table></div>
+        </section>
+        <section data-detail-panel="routing" aria-label="Routing" hidden>
+          <nav class="detail-navigation" aria-label="Routing views">
+            <a data-routing-tab="bgp">BGP</a>
+            <a data-routing-tab="static-routes">Static routes</a>
+          </nav>
+          <section data-routing-panel="bgp" aria-labelledby="detail-bgp-heading">
+            <h3 id="detail-bgp-heading">BGP neighbors</h3>
+            <p id="detail-bgp-summary"></p>
+            <div class="table-scroll"><table aria-label="Simulated BGP neighbors">
+              <thead><tr><th>Neighbor</th><th>Remote ASN</th><th>State</th><th>Uptime (seconds)</th><th>Prefixes received</th><th>Prefixes sent</th></tr></thead>
+              <tbody id="detail-bgp-rows"></tbody>
+            </table></div>
+          </section>
+          <section data-routing-panel="static-routes" aria-labelledby="detail-routes-heading" hidden>
+            <div class="section-heading"><h3 id="detail-routes-heading">Static routes</h3><button id="new-static-route" type="button">Add simulated route</button></div>
+            <p class="hint">Changes affect this fake device's persisted route table only.
+              One route per destination prefix is supported in this scaffold.</p>
+            <div class="table-scroll"><table aria-label="Simulated static routes">
+              <thead><tr><th>Destination</th><th>Next hop</th><th>Interface</th><th>Metric</th><th>Enabled</th><th>Description</th><th>Actions</th></tr></thead>
+              <tbody id="detail-route-rows"></tbody>
+            </table></div>
+            <p id="static-route-empty" hidden>No simulated static routes are configured.</p>
+            <form id="static-route-form">
+              <h4 id="static-route-editor-heading">Add simulated route</h4>
+              <div class="fields">
+                <label>Destination prefix<input name="destination" required placeholder="198.51.100.0/24" autocomplete="off"></label>
+                <label>Next-hop address<input name="next_hop" required placeholder="192.0.2.1" autocomplete="off"></label>
+                <label>Outgoing interface<select name="interface"><option value="">Unspecified</option><option>eth0</option><option>eth1</option><option>lo</option></select></label>
+                <label>Metric<input name="metric" type="number" min="0" max="65535" value="1" required></label>
+                <label>Description<input name="description" maxlength="200" autocomplete="off"></label>
+                <label class="check"><input name="enabled" type="checkbox" checked>Enabled</label>
+              </div>
+              <p class="hint">Use a canonical IPv4/IPv6 network prefix and a next hop from the same address family. The API validates both.</p>
+              <div class="actions"><button type="submit" class="primary">Save simulated route</button><button id="cancel-static-route" type="button">Cancel edit</button></div>
+            </form>
+          </section>
+        </section>
+        <section data-detail-panel="mpls" aria-label="MPLS" hidden>
+          <nav class="detail-navigation" aria-label="MPLS views">
+            <a data-mpls-tab="interfaces">Interfaces</a>
+            <a data-mpls-tab="ldp">LDP neighbors</a>
+            <a data-mpls-tab="lsps">LSPs</a>
+          </nav>
+          <section data-mpls-panel="interfaces" aria-labelledby="detail-mpls-interfaces-heading"><h3 id="detail-mpls-interfaces-heading">MPLS interfaces</h3>
+            <div class="table-scroll"><table aria-label="Simulated MPLS interfaces"><thead><tr><th>Interface</th><th>Enabled</th></tr></thead><tbody id="detail-mpls-interface-rows"></tbody></table></div>
+          </section>
+          <section data-mpls-panel="ldp" aria-labelledby="detail-ldp-heading" hidden><h3 id="detail-ldp-heading">LDP neighbors</h3>
+            <div class="table-scroll"><table aria-label="Simulated LDP neighbors"><thead><tr><th>Router ID</th><th>Address</th><th>State</th><th>Uptime (seconds)</th></tr></thead><tbody id="detail-ldp-rows"></tbody></table></div>
+          </section>
+          <section data-mpls-panel="lsps" aria-labelledby="detail-lsps-heading" hidden><h3 id="detail-lsps-heading">Label-switched paths</h3>
+            <div class="table-scroll"><table aria-label="Simulated MPLS label-switched paths"><thead><tr><th>Name</th><th>Source</th><th>Destination</th><th>State</th><th>Label</th></tr></thead><tbody id="detail-lsp-rows"></tbody></table></div>
+          </section>
+        </section>
+      </div>
+    </section>
+    <div class="layout" id="view-role-accounts" data-page="role-accounts" hidden>
+      <section class="panel inventory" aria-labelledby="accounts-heading">
+        <h2 id="accounts-heading">Role accounts</h2>
+        <p class="hint">Reusable device or bastion logins, not application permission roles.
+          Updating an account changes credentials used by every profile referencing it.</p>
+        <ul id="accounts" aria-label="Saved role accounts"></ul>
+        <button id="new-account" type="button">New role account</button>
+      </section>
+      <section class="panel editor">
+        <form id="account-form" aria-labelledby="account-heading">
+          <h3 id="account-heading">New role account</h3>
+          <label>Account name <input name="name" required maxlength="100" autocomplete="off"></label>
+          <label>Account username <input name="username" required autocomplete="off"></label>
+          <label>Authentication method
+            <select name="authentication_type" required>
+              <option value="password">Username and password</option>
+              <option value="ssh_key">Username and SSH private key</option>
+            </select>
+          </label>
+          <label data-account-password>Account password
+            <input name="password" type="password" autocomplete="new-password">
+            <span id="account-secret-state" class="hint">Not stored.</span>
+          </label>
+          <label data-account-key hidden>SSH private key
+            <textarea name="private_key" rows="7" spellcheck="false" autocapitalize="off" autocomplete="off"
+              placeholder="Paste the complete private key, including BEGIN and END lines"></textarea>
+            <span id="account-key-state" class="hint">Not stored.</span>
+          </label>
+          <label data-account-key hidden>Private-key passphrase (if encrypted)
+            <input name="key_passphrase" type="password" autocomplete="new-password">
+          </label>
+          <p class="hint">Choose one authentication method. Leave its secret blank to
+            preserve it when editing the same method. Changing methods requires
+            a new credential and clears the old one. Keys and passwords are never
+            displayed after saving. Referenced accounts cannot be deleted.
+            Use only fake demo credentials in this local demonstration.</p>
+          <div class="actions">
+            <button id="save-account" type="submit" disabled>Save role account</button>
+            <button id="delete-account" type="button" class="danger" disabled>Delete account</button>
+          </div>
+        </form>
+      </section>
+    </div>
+    <div class="layout" id="view-proxies" data-page="proxies" hidden>
+      <section class="panel inventory" aria-labelledby="proxies-heading">
+        <h2 id="proxies-heading">Proxies and bastions</h2>
+        <p class="hint">Reusable connection paths. Device and bastion authentication
+          are separate. Test the full path from a saved device.</p>
+        <ul id="proxies" aria-label="Saved proxies"></ul>
+        <button id="new-proxy" type="button">New proxy</button>
+      </section>
+      <section class="panel editor" aria-labelledby="proxy-heading">
+        <h2 id="proxy-heading">New proxy</h2>
+        <form id="proxy-form">
+          <fieldset>
+            <legend>Proxy connection</legend>
+            <div class="fields">
+              <label>Proxy name
+                <input name="name" required maxlength="100" autocomplete="off">
+              </label>
+              <label>Connection method <select name="type" required></select></label>
+              <label>Proxy or bastion host
+                <input name="host" required placeholder="127.0.0.1" autocomplete="off">
+              </label>
+              <label>Proxy or bastion port
+                <input name="port" type="number" min="1" max="65535" required>
+              </label>
+              <label>Proxy role account
+                <select name="role_account_id"><option value="">Per-proxy credentials</option></select>
+              </label>
+              <label data-inline-proxy>Proxy or bastion username
+                <input name="username" autocomplete="off">
+              </label>
+              <label data-inline-proxy>Proxy or bastion password
+                <input name="password" type="password" autocomplete="new-password">
+                <span id="proxy-secret-state" class="hint">Not stored.</span>
+              </label>
+              <label class="check" data-inline-proxy><input name="clear_password" type="checkbox"> Clear stored proxy password</label>
+              <label data-inline-proxy>Bastion private-key file (SSH only)
+                <input name="private_key_path" autocomplete="off" placeholder="Server-local path">
+              </label>
+              <label>Bastion known-hosts file (SSH only)
+                <input name="known_hosts_path" autocomplete="off" placeholder="Server-local path">
+              </label>
+            </div>
+            <p id="proxy-description" class="hint"></p>
+          </fieldset>
+          <p class="hint">Changing a proxy affects all devices referencing it.
+            Blank passwords preserve existing credentials. Proxies in use cannot
+            be deleted. Use a role account to share credentials without copying them.</p>
+          <div class="actions">
+            <button id="save-proxy" type="submit" class="primary" disabled>Save proxy</button>
+            <button id="delete-proxy" type="button" class="danger" disabled>Delete proxy</button>
+          </div>
+        </form>
+      </section>
+    </div>
+    <section class="panel" id="view-transactions" data-page="transactions" aria-labelledby="transactions-heading" hidden>
+      <div class="section-heading">
+        <div>
+          <h2 id="transactions-heading">Immutable transactions</h2>
+          <p>Device configuration changes are attributed to the authenticated
+            engineer and record normalized before/after state. Credentials,
+            tokens and secret request fields are excluded.</p>
+        </div>
+        <button id="refresh-transactions" type="button">Refresh transactions</button>
+      </div>
+      <form id="transaction-filters" class="transaction-filters">
+        <label>Device ID<input name="connection_id" autocomplete="off"></label>
+        <label>Action<input name="action" autocomplete="off" placeholder="static_route.create"></label>
+        <label>User subject<input name="actor_subject" autocomplete="off"></label>
+        <label>Outcome<select name="outcome"><option value="">Any outcome</option><option value="succeeded">Succeeded</option><option value="failed">Failed</option></select></label>
+        <label>From (UTC)<input name="from_time" type="datetime-local"></label>
+        <label>To (UTC)<input name="to_time" type="datetime-local"></label>
+        <button type="submit">Apply filters</button>
+      </form>
+      <p id="transactions-status" role="status" aria-live="polite">Open this view to load transaction records.</p>
+      <p id="transaction-page" class="hint"></p>
+      <div class="table-scroll"><table aria-label="Immutable device configuration transactions">
+        <thead><tr><th>Timestamp (UTC)</th><th>User</th><th>Roles</th><th>Action</th><th>Target</th><th>Outcome</th><th>Correlation ID</th><th>Detail</th><th>State</th></tr></thead>
+        <tbody id="transaction-rows"></tbody>
+      </table></div>
+      <p id="transactions-empty" hidden>No matching transactions.</p>
+      <div class="actions"><button id="transactions-previous" type="button">Previous</button><button id="transactions-next" type="button">Next</button></div>
+    </section>
+    <section class="panel" aria-labelledby="capabilities-heading">
+      <h2 id="capabilities-heading">Connector capabilities</h2>
+      <p>Capabilities come from the API. Unsupported combinations are not silently
+        retried with a different connector. Bastion forwarding policies, shell
+        prompts, MFA, and vendor firmware can impose additional restrictions.</p>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th scope="col">Connector</th><th scope="col">Device protocols</th><th scope="col">Scope</th></tr></thead>
+          <tbody id="capabilities"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
